@@ -6,8 +6,13 @@ namespace players.rts
 {
     public class PlayerManager : MonoBehaviour, IamSingleton
     {
-        public Dictionary<string, Player> PlayerLobby = new Dictionary<string, Player>();
-        public Dictionary<int, List<Player>> Teams = new Dictionary<int, List<Player>>();
+        [SerializeField]
+        [ReadOnly(true)]
+        protected PlayerDictionary PlayerLobby = new PlayerDictionary();
+        [SerializeField]
+        [ReadOnly(true)]
+        protected TeamDictionary Teams = new TeamDictionary();
+
 
         public void iInitialize()
         {
@@ -23,14 +28,16 @@ namespace players.rts
         /// </summary>
         public void updateTeamDict()
         {
-            Dictionary<int, List<Player>> changedTeams = new Dictionary<int, List<Player>>();
+            // TODO Extend the CustomDict class for iterator and other needed normal Dict functions!
+
+            /*Dictionary<int, List<Player>> changedTeams = new Dictionary<int, List<Player>>();
 
             foreach (KeyValuePair<string, Player> player in PlayerLobby)
             {
                 changedTeams[player.Value.Team.Id].Add(player.Value);
             }
 
-            Teams = changedTeams;
+            Teams = changedTeams;*/
         }
 
         /// <summary>
@@ -41,7 +48,7 @@ namespace players.rts
         /// <param name="_AllPlayersFromLobby"></param>
         public void initPlayerDict(Dictionary<string, Player> _AllPlayersFromLobby)
         {
-            PlayerLobby = _AllPlayersFromLobby;
+            //PlayerLobby = _AllPlayersFromLobby;
         }
 
         /// <summary>
@@ -50,7 +57,7 @@ namespace players.rts
         /// <param name="_Player"></param>
         public void addPlayer(Player _Player)
         {
-            PlayerLobby[_Player.Playername] = _Player;
+            //PlayerLobby[_Player.Playername] = _Player;
         }
 
         /// <summary>
@@ -65,6 +72,7 @@ namespace players.rts
         // TODO we need to manage those
     }
 
+    [System.Serializable]
     public class PlayerTeamSettings
     {
         public int Id = -1; // means FFA no team
@@ -83,6 +91,7 @@ namespace players.rts
         }
     }
 
+    [System.Serializable]
     public class Player
     {
         public string Playername = "Unkown";
