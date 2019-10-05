@@ -1,11 +1,22 @@
 ﻿using manager.ioc;
 using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine.EventSystems;
 
 namespace players.rts
 {
     public class PlayerManager : MonoBehaviour, IamSingleton
     {
+        [Mandatory]
+        public GameObject DefaultEventSystemPrefab;
+        [AutoAssign]
+        public EventSystem EventSystem;
+
+        [Mandatory]
+        public GameObject DefaultPlayerUiPrefab;
+        [AutoAssign]
+        public GameObject PlayersUiCanvasPanel;
+
         [SerializeField]
         [ReadOnly(true)]
         protected PlayerDictionary PlayerLobby = new PlayerDictionary();
@@ -13,12 +24,13 @@ namespace players.rts
         [ReadOnly(true)]
         protected TeamDictionary Teams = new TeamDictionary();
 
-
         public void iInitialize()
         {
-            // do we need another script for players?
-            // I guess not since there is no visual aspect for player management
+            EventSystem = MANAGER.CheckScriptAvailability<EventSystem>("EventSystem", DefaultEventSystemPrefab);
+
+            PlayersUiCanvasPanel = MANAGER.CheckGameObjectAvailability("PlayersCanvas", DefaultPlayerUiPrefab);
         }
+
 
         /// <summary>
         /// Since every Player stores his own team ID the only thing we need to do is to keep this array up to date.
@@ -26,50 +38,68 @@ namespace players.rts
         /// WARNING: Remember that if you create a UI where you can change those settings you have to "mirror" the current state with a "deep copy".
         /// Then after the user changed the "deep copy" override the corresponding Player in 'PlayerLobby' with it. Afterwards call this function.
         /// </summary>
-        public void updateTeamDict()
+        public void OverrideTeamSettings(TeamDictionary _Clone)
         {
-            // TODO Extend the CustomDict class for iterator and other needed normal Dict functions!
-
-            /*Dictionary<int, List<Player>> changedTeams = new Dictionary<int, List<Player>>();
-
-            foreach (KeyValuePair<string, Player> player in PlayerLobby)
-            {
-                changedTeams[player.Value.Team.Id].Add(player.Value);
-            }
-
-            Teams = changedTeams;*/
+            Teams = _Clone;
         }
 
         /// <summary>
-        /// When creating: usually only lobby creator (as local player) 
-        /// But who knows maybe you have a system to create lobbies directly with friends via steam for example (think about local players then as well!)
-        /// When joining: give the local player every other slots of players and ofc himself (giving the local player flag)
+        /// Use this for views where people can modify team stats to get a clone and in the end override the TeamSettings with the clone.
         /// </summary>
         /// <param name="_AllPlayersFromLobby"></param>
-        public void initPlayerDict(Dictionary<string, Player> _AllPlayersFromLobby)
+        public TeamDictionary GetTeamCloneForTempViews()
         {
-            //PlayerLobby = _AllPlayersFromLobby;
+            TeamDictionary clone = new TeamDictionary();
+            foreach (List<Player> team in Teams)
+            {
+                foreach (Player player in team)
+                {
+                    clone.AddToSpecificTeam(player.Team.Id, player);
+                }
+            }
+            return clone;
+        }
+
+        /// <summary>
+        /// Use this for views where people can modify player to get a clone and in the end override the playerLobby with the clone.
+        /// </summary>
+        /// <param name="_AllPlayersFromLobby"></param>
+        public PlayerDictionary GetLobbyCloneForTempViews()
+        {
+            PlayerDictionary clone = new PlayerDictionary();
+            foreach (Player player in PlayerLobby)
+            {
+                clone.Add(player.PlayerName, new Player(player));
+            }
+            return clone;
+        }
+
+        /// <summary>
+        /// Use this to override lobbies with temp view lobbies.
+        /// </summary>
+        /// <param name="_Clone"></param>
+        public void OverrideLobby(PlayerDictionary _Clone)
+        {
+            PlayerLobby = _Clone;
         }
 
         /// <summary>
         /// Joins Lobby
         /// </summary>
         /// <param name="_Player"></param>
-        public void addPlayer(Player _Player)
+        public void AddPlayer(Player _Player)
         {
-            //PlayerLobby[_Player.Playername] = _Player;
+            PlayerLobby.Add(_Player.PlayerName, _Player);
         }
 
         /// <summary>
         /// Left Lobby
         /// </summary>
         /// <param name="_Player"></param>
-        public void removePlayer(Player _Player)
+        public void RemovePlayer(Player _Player)
         {
-            PlayerLobby.Remove(_Player.Playername);
+            PlayerLobby.Remove(_Player.PlayerName);
         }
-        // TODO we need Teams
-        // TODO we need to manage those
     }
 
     [System.Serializable]
@@ -94,7 +124,7 @@ namespace players.rts
     [System.Serializable]
     public class Player
     {
-        public string Playername = "Unkown";
+        public string PlayerName = "Unkown";
         public int LobbySlot = -1;
         public PlayerTeamSettings Team = new PlayerTeamSettings(-1, true, false, true );
         public Color PlayerColor = Color.red;
@@ -105,13 +135,36 @@ namespace players.rts
 
         public Player() : this("Unkown",  -1, new PlayerTeamSettings(),  Color.red,  false){}
 
-        public Player(bool _isLocalPlayer) : this("Unkown", -1, new PlayerTeamSettings(), Color.red, _isLocalPlayer){}
+        public Player(Player _ToClone)
+        {
+            PlayerName = _ToClone.PlayerName;
+            LobbySlot = _ToClone.LobbySlot;
+            Team = _ToClone.Team;
+            PlayerColor = _ToClone.PlayerColor;
+            IsLocalPlayer = _ToClone.IsLocalPlayer;
+            Resources = new Dictionary<string, int>();
+            ChosenSettings = new Dictionary<string, string>(); // not intedet to be set during a game lol
+            AI = _ToClone.AI;
+
+
+            // TODO export this in a .env file maybe or another settings file?
+            //These are initial game start values
+            //Example Resources I work with but you can add what ever you want here:
+            Resources.Add("gold", 500);
+            Resources.Add("wood", 200);
+            Resources.Add("food", 0); // this is the current value the player has I subscribe OnEnable and OnDisable of buildings that provide this "food"
+            //Example settings I work with but you can add what ever you want here:
+            ChosenSettings.Add("race", "orc");
+            ChosenSettings.Add("handycap", "100");
+        }
+
+        public Player(bool _IsLocalPlayer) : this("Unkown", -1, new PlayerTeamSettings(), Color.red, _IsLocalPlayer){}
 
         public Player(string _Name, int _LobbySlot, PlayerTeamSettings _Team, Color _Color, bool _IsLocalPlayer) : this( _Name,  _LobbySlot,  _Team,  _Color,  _IsLocalPlayer, false) {}
 
         public Player(string _Name, int _LobbySlot, PlayerTeamSettings _Team, Color _Color, bool _IsLocalPlayer, bool _IsAI)
         {
-            Playername = _Name;
+            PlayerName = _Name;
             LobbySlot = _LobbySlot;
             Team = _Team;
             PlayerColor = _Color;
@@ -139,7 +192,7 @@ namespace players.rts
         /// <param name="_ResourceName"> example: wood</param>
         /// <param name="_Amount">negative values will substract the ammount</param>
         /// <returns></returns>        
-        public int add(string _ResourceName, int _Amount)
+        public int AddResource(string _ResourceName, int _Amount)
         {
             if (Resources.ContainsKey(_ResourceName))
             {
@@ -159,7 +212,7 @@ namespace players.rts
         /// <param name="_ResourceName"> example: wood</param>
         /// <param name="_Amount">negative values will substract the ammount</param>
         /// <returns></returns>        
-        public int addNoBelowZero(string _ResourceName, int _Amount)
+        public int AddResourceNotBelowZero(string _ResourceName, int _Amount)
         {
             if (Resources.ContainsKey(_ResourceName))
             {
